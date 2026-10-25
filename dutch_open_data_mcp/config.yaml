@@ -1,5 +1,5 @@
 name: "Dutch Open Data MCP"
-version: "1.1.1"
+version: "1.1.2"
 slug: "dutch_open_data_mcp"
 description: >-
   Serve 46 Dutch government open-data sources (CBS, KNMI, RDW, Tweede Kamer,

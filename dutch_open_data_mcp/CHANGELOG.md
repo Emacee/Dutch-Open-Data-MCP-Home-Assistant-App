@@ -4,6 +4,23 @@ Versions below 1.0.0 were developed in a private repository; they are kept
 here because they document why things are the way they are.
 
 
+## 1.1.2
+
+Security update of the dependencies. `npm audit` reported 6 vulnerabilities
+(4 high, 2 moderate); now 0.
+
+- `@modelcontextprotocol/sdk` 1.31.0 → 1.32.2 (also in `overrides`, so
+  NL-GOV-MCP uses the same copy). Fixes GHSA-46jr-4wx8-v453 (one request
+  within the size limit could exhaust memory during validation),
+  GHSA-22jm-h49p-29qw, GHSA-6prh-2h8m-c8cw and GHSA-rvq5-wwqv-78pq.
+- Express 5.2.1 → 5.3.0, with body-parser 2.3.0 → 2.4.0
+  (GHSA-27r3-jxmh-p828: denial of service via trailing bytes after a
+  compressed request body).
+- Transitive: zod 4.6.7 (GHSA-mrhx-c7xc-m3w5, memory exhaustion),
+  fast-uri 3.1.9 (four URI parsing advisories), ip-address 10.7.5
+  (GHSA-rxp7-6hxx-x8q5).
+- NL-GOV-MCP stays at `f875a21`; the lockfile still fetches it over HTTPS.
+
 ## 1.1.1
 
 - New icon and logo (Overheid.nl), shown in the Home Assistant add-on store.

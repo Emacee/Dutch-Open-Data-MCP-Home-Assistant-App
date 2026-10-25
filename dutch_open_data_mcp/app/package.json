@@ -8,11 +8,11 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.31.0",
-    "express": "5.2.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "express": "5.3.0",
     "nl-gov-mcp": "git+https://github.com/WAINUTAI/NL-GOV-MCP.git#f875a21a48a21feee71e661eedb48d2a8b851b3a"
   },
   "overrides": {
-    "@modelcontextprotocol/sdk": "1.31.0"
+    "@modelcontextprotocol/sdk": "1.32.2"
   }
 }
