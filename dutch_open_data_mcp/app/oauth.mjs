@@ -30,6 +30,14 @@ const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 const REFRESH_TOKEN_IDLE_MS = 90 * 24 * 60 * 60 * 1000;
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_CLIENTS = 200; // basic hygiene cap on the persisted client list
+// Registration is unauthenticated, and every client is written to /data (and
+// so into every backup). Without these, one request within the 1 MB body
+// limit could store a megabyte of redirect URIs, times MAX_CLIENTS.
+const MAX_REDIRECT_URIS = 10;
+const MAX_REDIRECT_URI_LENGTH = 2000;
+// Schemes a browser would run or read locally instead of handing the code to
+// the client. Custom app schemes (e.g. cursor://) and http(s) stay allowed.
+const FORBIDDEN_REDIRECT_SCHEMES = new Set(["javascript:", "data:", "vbscript:", "file:", "blob:"]);
 
 /**
  * Tokens are stored as SHA-256 hashes, never as themselves. /data — and so
@@ -141,6 +149,28 @@ function timingSafeEqualStr(a, b) {
   return timingSafeEqual(bufA, bufB);
 }
 
+/** A redirect URI a client may register: absolute, no fragment (RFC 6749 §3.1.2), safe scheme. */
+function isAcceptableRedirectUri(uri) {
+  if (typeof uri !== "string" || uri.length === 0 || uri.length > MAX_REDIRECT_URI_LENGTH) return false;
+  let url;
+  try {
+    url = new URL(uri);
+  } catch {
+    return false;
+  }
+  return !url.hash && !uri.includes("#") && !FORBIDDEN_REDIRECT_SCHEMES.has(url.protocol);
+}
+
+/** Where the browser goes after approval, as shown on the consent page. */
+function redirectTarget(uri) {
+  try {
+    const url = new URL(uri);
+    return url.host ? `${url.protocol}//${url.host}` : url.protocol;
+  } catch {
+    return uri;
+  }
+}
+
 function verifyPkce(codeVerifier, codeChallenge) {
   if (!codeVerifier || typeof codeVerifier !== "string") return false;
   const computed = createHash("sha256").update(codeVerifier).digest("base64url");
@@ -148,6 +178,9 @@ function verifyPkce(codeVerifier, codeChallenge) {
 }
 
 function consentPage({ clientName, error, formAction, hiddenFields }) {
+  // Registration is open to anyone, so the client name proves nothing: show
+  // where the authorization code will actually be sent.
+  const target = redirectTarget(hiddenFields.redirect_uri);
   const hidden = Object.entries(hiddenFields)
     .map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`)
     .join("\n");
@@ -170,6 +203,8 @@ function consentPage({ clientName, error, formAction, hiddenFields }) {
 <body>
   <h1>Authorize ${escapeHtml(clientName || "MCP client")}</h1>
   <p>This client wants to query Dutch government open data through your server.</p>
+  <p class="warn">After you approve, you are sent to <strong>${escapeHtml(target)}</strong>.
+  Only continue if that is the app you are adding.</p>
   ${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}
   <form method="post" action="${escapeHtml(formAction)}">
     ${hidden}
@@ -190,6 +225,13 @@ export function createOAuthRouter({ getAuthToken, log, publicOrigin }) {
   const router = express.Router();
 
   router.use((_req, res, next) => {
+    // The consent page asks for the master token, so it must never be
+    // framed by another site (clickjacking), and nothing here is a
+    // document another origin should be able to sniff into something else.
+    res.set("X-Content-Type-Options", "nosniff");
+    res.set("X-Frame-Options", "DENY");
+    res.set("Content-Security-Policy", "frame-ancestors 'none'");
+    res.set("Referrer-Policy", "no-referrer");
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -236,6 +278,13 @@ export function createOAuthRouter({ getAuthToken, log, publicOrigin }) {
     const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u) => typeof u === "string" && u.length > 0) : [];
     if (redirectUris.length === 0) {
       res.status(400).json({ error: "invalid_client_metadata", error_description: "redirect_uris is required" });
+      return;
+    }
+    if (redirectUris.length > MAX_REDIRECT_URIS || !redirectUris.every(isAcceptableRedirectUri)) {
+      res.status(400).json({
+        error: "invalid_redirect_uri",
+        error_description: `at most ${MAX_REDIRECT_URIS} absolute URIs without a fragment, no javascript:/data:/file: schemes`,
+      });
       return;
     }
 
@@ -379,6 +428,9 @@ export function createOAuthRouter({ getAuthToken, log, publicOrigin }) {
   // --- /token: exchange a code (or refresh_token) for an access token ---
   router.post("/token", express.urlencoded({ extended: false }), (req, res) => {
     const body = req.body ?? {};
+    // RFC 6749 §5.1: responses carrying tokens must not be cached.
+    res.set("Cache-Control", "no-store");
+    res.set("Pragma", "no-cache");
 
     if (body.grant_type === "authorization_code") {
       const { code, redirect_uri, client_id, code_verifier } = body;

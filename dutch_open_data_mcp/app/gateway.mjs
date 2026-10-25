@@ -560,6 +560,16 @@ webApp.use((req, res, next) => {
     "This page is only reachable through Home Assistant Ingress — open the add-on from the Home Assistant UI.",
   );
 });
+// The forms below save API keys, revoke tokens and restart the add-on. A
+// page on another site could post to them in a logged-in browser, the
+// ingress session cookie riding along; browsers mark such requests
+// Sec-Fetch-Site: cross-site. Requests without the header (older browsers,
+// scripts) are let through, as before.
+webApp.use((req, res, next) => {
+  if (req.method !== "POST" || req.get("sec-fetch-site") !== "cross-site") return next();
+  log("warning", "Refused a cross-site form post to the dashboard", { path: req.path });
+  res.status(403).type("text/plain").send("Cross-site requests are not accepted.");
+});
 webApp.get("/", (req, res) => {
   let banner;
   if (req.query.saved !== undefined) {

@@ -44,7 +44,12 @@ ENV NODE_ENV=production
 # below the >=22 nl-gov-mcp requires. The check prints it in the build log
 # (gateway.mjs repeats it at runtime). Non-fatal on purpose: a failed build
 # blocks installing the add-on at all. Alpine 3.22 (build.yaml) ships 22.x.
-RUN apk add --no-cache nodejs jq \
+#
+# apk upgrade first: the base image is only as current as its last rebuild,
+# so this applies the Alpine security fixes released since (OpenSSL, musl,
+# busybox, …) every time the add-on is built.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache nodejs jq \
     && node -e 'const v=process.versions.node, m=Number(v.split(".")[0]); console.log(m<22 ? `WARNING: base image ships Node ${v}; nl-gov-mcp asks for >=22. Bump build_from in build.yaml.` : `Node ${v} satisfies >=22`)'
 
 WORKDIR /app

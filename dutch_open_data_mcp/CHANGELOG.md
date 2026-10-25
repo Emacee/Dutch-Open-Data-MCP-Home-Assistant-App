@@ -4,6 +4,27 @@ Versions below 1.0.0 were developed in a private repository; they are kept
 here because they document why things are the way they are.
 
 
+## 1.1.3
+
+Security hardening; no change for existing clients.
+
+- **OAuth registration is bounded.** `/register` is open to anyone (as the
+  spec requires) and every client is stored in `/data`, so one request could
+  store a megabyte of redirect URIs, up to 200 times. Now at most 10 redirect
+  URIs of up to 2000 characters, each an absolute URI without a fragment;
+  `javascript:`, `data:`, `vbscript:`, `file:` and `blob:` are refused.
+  Custom app schemes and `http://127.0.0.1` callbacks still work.
+- **The consent page shows where the code goes.** Anyone can register a
+  client with any name, so the page now also names the site you are sent to
+  after approving, and can no longer be shown inside another site's frame
+  (`X-Frame-Options: DENY`, `frame-ancestors 'none'`).
+- Token responses are sent with `Cache-Control: no-store` (RFC 6749 §5.1).
+- The ingress dashboard refuses form posts that the browser marks as
+  cross-site, so another web page cannot save keys, revoke tokens or restart
+  the add-on through your logged-in browser.
+- The image build runs `apk upgrade`, so Alpine security fixes released
+  after the base image was built are applied too.
+
 ## 1.1.2
 
 Security update of the dependencies. `npm audit` reported 6 vulnerabilities
